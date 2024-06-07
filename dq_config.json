@@ -1,7 +1,42 @@
 {
   "files": [
-    "path_to_file1.csv",
-    "path_to_file2.csv",
-    "path_to_file3.csv"
-  ]
+    {
+      "path": "path_to_file1.csv",
+      "format": "csv",
+      "options": {
+        "header": true,
+        "inferSchema": true,
+        "delimiter": ","
+      }
+    },
+    {
+      "path": "path_to_file2.json",
+      "format": "json",
+      "options": {}
+    },
+    {
+      "path": "path_to_file3.parquet",
+      "format": "parquet",
+      "options": {}
+    }
+  ],
+  "output_path": "data_quality_report.parquet",
+  "metrics": {
+    "numeric": ["count", "missing", "min", "max", "mean", "median", "std", "skewness", "kurtosis"],
+    "string": ["count", "missing", "cardinality", "distribution", "unique_values"],
+    "timestamp": ["count", "missing", "min", "max"],
+    "custom_aggregations": {
+      "column_name": {
+        "aggregation_name": "aggregation_function"
+      }
+    }
+  },
+  "range_checks": {
+    "numeric": {
+      "column_name": {"min": value, "max": value}
+    },
+    "timestamp": {
+      "column_name": {"min": "yyyy-mm-dd", "max": "yyyy-mm-dd"}
+    }
+  }
 }
