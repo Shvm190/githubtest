@@ -20,7 +20,7 @@
       "options": {}
     }
   ],
-  "output_path": ".",
+  "output_path": "path_to_output_folder",
   "metrics": {
     "numeric": ["count", "missing", "min", "max", "mean", "median", "std", "skewness", "kurtosis"],
     "string": ["count", "missing", "cardinality", "distribution", "unique_values"],
