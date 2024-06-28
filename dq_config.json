@@ -20,23 +20,25 @@
       "options": {}
     }
   ],
-  "output_path": "data_quality_report.parquet",
+  "output_path": ".",
   "metrics": {
     "numeric": ["count", "missing", "min", "max", "mean", "median", "std", "skewness", "kurtosis"],
     "string": ["count", "missing", "cardinality", "distribution", "unique_values"],
     "timestamp": ["count", "missing", "min", "max"],
     "custom_aggregations": {
-      "column_name": {
-        "aggregation_name": "aggregation_function"
+      "price": {
+        "sum": "sum",
+        "average": "avg"
       }
     }
   },
   "range_checks": {
     "numeric": {
-      "column_name": {"min": value, "max": value}
+      "price": {"min": 0, "max": 1000},
+      "quantity": {"min": 1, "max": 100}
     },
     "timestamp": {
-      "column_name": {"min": "yyyy-mm-dd", "max": "yyyy-mm-dd"}
+      "purchase_date": {"min": "2020-01-01", "max": "2023-12-31"}
     }
   }
 }
