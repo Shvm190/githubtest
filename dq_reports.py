@@ -1,7 +1,7 @@
 import json
 import pandas as pd
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, count, countDistinct, min, max, mean, stddev, skewness, kurtosis, expr
+from pyspark.sql.functions import col, count, countDistinct, min, max, mean, stddev, skewness, kurtosis, expr, regexp_replace, trim
 from pyspark.sql.types import IntegerType, FloatType, DoubleType, LongType, StringType, TimestampType, DateType
 
 # Initialize Spark session
@@ -50,7 +50,12 @@ def data_quality_report(df, metrics, range_checks, custom_aggregations):
                     'max_check': stats['max'] <= expected_max if expected_max is not None else 'N/A'
                 }
 
+            report.append({'column': column, **column_metrics})
+
         elif isinstance(col_type, StringType):
+            # Replace null characters and trim whitespace
+            df = df.withColumn(column, trim(regexp_replace(col(column), '\x00', '')))
+
             stats = df.select(
                 count(col(column)).alias('count'),
                 count(expr(f"{column} is null or {column} = ''")).alias('missing'),
@@ -58,18 +63,19 @@ def data_quality_report(df, metrics, range_checks, custom_aggregations):
             ).first()
 
             value_counts = df.groupBy(col(column)).count().orderBy('count', ascending=False).limit(10).collect()
-            distribution = {row[column]: row['count'] for row in value_counts}
-
-            unique_values = df.select(col(column)).distinct().limit(10).rdd.flatMap(lambda x: x).collect()
+            distribution = [{column: row[column], 'count': row['count']} for row in value_counts]
 
             column_metrics.update({
                 'type': 'string',
                 'count': stats['count'],
                 'missing': stats['missing'],
                 'cardinality': stats['cardinality'],
-                'distribution': distribution,
-                'unique_values': unique_values
             })
+
+            report.append({'column': column, **column_metrics})
+
+            for dist in distribution:
+                report.append({'column': column, 'value': dist[column], 'value_count': dist['count']})
 
         elif isinstance(col_type, (TimestampType, DateType)):
             stats = df.select(
@@ -97,12 +103,12 @@ def data_quality_report(df, metrics, range_checks, custom_aggregations):
                     'max_check': stats['max'] <= expected_max if expected_max is not None else 'N/A'
                 }
 
+            report.append({'column': column, **column_metrics})
+
         for agg_col, agg_funcs in custom_aggregations.get(column, {}).items():
             for agg_name, agg_func in agg_funcs.items():
                 custom_agg_result = df.agg(expr(f"{agg_func}({agg_col})").alias(f"{agg_name}")).first()
                 column_metrics[f"custom_aggregation_{agg_name}"] = custom_agg_result[f"{agg_name}"]
-
-        report.append({'column': column, **column_metrics})
 
     return report
 
@@ -144,7 +150,7 @@ config_file = "path_to_config.json"
 quality_reports_df = process_files(config_file)
 
 # Save the quality reports to a Parquet file
-output_path = quality_reports_df.loc[0, "output_path"]
+output_path = "data_quality_report.parquet"
 write_reports_to_parquet(quality_reports_df, output_path)
 
 # To print a sample of the dataframe
