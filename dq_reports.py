@@ -8,7 +8,8 @@ from pyspark.sql.types import IntegerType, FloatType, DoubleType, LongType, Stri
 spark = SparkSession.builder.appName("DataQualityCheck").getOrCreate()
 
 def data_quality_report(df, metrics, range_checks, custom_aggregations):
-    report = []
+    overall_report = []
+    distribution_report = []
 
     for column in df.columns:
         col_type = df.schema[column].dataType
@@ -50,7 +51,7 @@ def data_quality_report(df, metrics, range_checks, custom_aggregations):
                     'max_check': stats['max'] <= expected_max if expected_max is not None else 'N/A'
                 }
 
-            report.append({'column': column, **column_metrics})
+            overall_report.append({'column': column, **column_metrics})
 
         elif isinstance(col_type, StringType):
             # Replace null characters and trim whitespace
@@ -72,10 +73,10 @@ def data_quality_report(df, metrics, range_checks, custom_aggregations):
                 'cardinality': stats['cardinality'],
             })
 
-            report.append({'column': column, **column_metrics})
+            overall_report.append({'column': column, **column_metrics})
 
             for dist in distribution:
-                report.append({'column': column, 'value': dist[column], 'value_count': dist['count']})
+                distribution_report.append({'column': column, 'value': dist[column], 'value_count': dist['count']})
 
         elif isinstance(col_type, (TimestampType, DateType)):
             stats = df.select(
@@ -103,14 +104,14 @@ def data_quality_report(df, metrics, range_checks, custom_aggregations):
                     'max_check': stats['max'] <= expected_max if expected_max is not None else 'N/A'
                 }
 
-            report.append({'column': column, **column_metrics})
+            overall_report.append({'column': column, **column_metrics})
 
         for agg_col, agg_funcs in custom_aggregations.get(column, {}).items():
             for agg_name, agg_func in agg_funcs.items():
                 custom_agg_result = df.agg(expr(f"{agg_func}({agg_col})").alias(f"{agg_name}")).first()
                 column_metrics[f"custom_aggregation_{agg_name}"] = custom_agg_result[f"{agg_name}"]
 
-    return report
+    return overall_report, distribution_report
 
 def process_files(config_file):
     with open(config_file, 'r') as f:
@@ -119,8 +120,8 @@ def process_files(config_file):
     metrics = config.get('metrics', {})
     range_checks = config.get('range_checks', {})
     custom_aggregations = metrics.get('custom_aggregations', {})
+    output_path = config.get('output_path', '.')
 
-    all_reports = []
     for file_info in config["files"]:
         file_path = file_info["path"]
         file_format = file_info["format"]
@@ -135,23 +136,21 @@ def process_files(config_file):
         else:
             raise ValueError(f"Unsupported file format: {file_format}")
 
-        report = data_quality_report(df, metrics, range_checks, custom_aggregations)
-        for r in report:
-            r['file'] = file_path
-        all_reports.extend(report)
-    
-    return pd.DataFrame(all_reports)
+        overall_report, distribution_report = data_quality_report(df, metrics, range_checks, custom_aggregations)
+        
+        # Create DataFrames from the reports
+        overall_report_df = pd.DataFrame(overall_report)
+        distribution_report_df = pd.DataFrame(distribution_report)
 
-def write_reports_to_parquet(df, output_path):
-    df.to_parquet(output_path, index=False)
+        # Write the reports to CSV files
+        overall_output_path = f"{output_path}/{file_path.split('/')[-1].split('.')[0]}_overall_report.csv"
+        distribution_output_path = f"{output_path}/{file_path.split('/')[-1].split('.')[0]}_distribution_report.csv"
+
+        overall_report_df.to_csv(overall_output_path, index=False)
+        distribution_report_df.to_csv(distribution_output_path, index=False)
+
+        print(f"Reports written for {file_path}")
 
 # Example usage
 config_file = "path_to_config.json"
-quality_reports_df = process_files(config_file)
-
-# Save the quality reports to a Parquet file
-output_path = "data_quality_report.parquet"
-write_reports_to_parquet(quality_reports_df, output_path)
-
-# To print a sample of the dataframe
-print(quality_reports_df.head())
+process_files(config_file)
