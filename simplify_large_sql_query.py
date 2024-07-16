@@ -1,73 +1,110 @@
-from collections import deque
+import re
 
-def identify_subqueries(query):
-  """
-  Identifies subqueries from the main query and creates a dictionary.
+def extract_subqueries(query):
+    """
+    Extracts subqueries from a SQL query string and returns a dictionary with subquery aliases as keys.
+    
+    Parameters:
+    query (str): The SQL query string.
 
-  Args:
-      query: The SQL query as a multi-line string.
+    Returns:
+    dict: A dictionary with subquery aliases as keys and subquery strings as values.
+    """
+    subqueries = {}
+    pattern = re.compile(r'\(([^()]+)\)\s*(\w+)', re.DOTALL)
 
-  Returns:
-      A dictionary with the main query and subqueries as variables.
-  """
-  subqueries = {}
-  stack = deque()
-  current_alias = None
-  result = ""
+    while True:
+        matches = pattern.findall(query)
+        if not matches:
+            break
+        for subquery, alias in matches:
+            subqueries[alias] = subquery.strip()
+            query = query.replace(f'({subquery}) {alias}', alias, 1)
+    
+    subqueries['main_query'] = query.strip()
+    return subqueries
 
-  for line in query.splitlines():
-    line = line.strip()
-    if not line:
-      continue
+def format_subqueries(subqueries):
+    """
+    Formats the subqueries and main query in the dictionary as f-strings.
 
-    if line.lower().startswith("select"):
-      # New subquery or main query
-      if stack:
-        # Subquery
-        subquery_str = "".join(stack)
-        subquery_alias = current_alias or f"SUBQ{len(subqueries) + 1}"
-        subqueries[subquery_alias] = f"""{subquery_str}"""
-        current_alias = None
-        stack.clear()
-      else:
-        # Main query
-        result += line
+    Parameters:
+    subqueries (dict): A dictionary with subquery aliases as keys and subquery strings as values.
 
-    elif line.lower().split()[0] in ("from", "join", "on", "where"):
-      # Part of the current query (main or sub)
-      if stack:
-        stack.append(line + " ")
-      else:
-        result += line + " "
+    Returns:
+    dict: A dictionary with formatted subquery strings.
+    """
+    formatted_subqueries = {}
+    for key, value in subqueries.items():
+        formatted_subqueries[key] = f'f"""{value}"""'
+    return formatted_subqueries
 
-    else:
-      # Potential alias
-      parts = line.split()
-      if len(parts) > 1 and parts[-2] == "as":
-        current_alias = parts[-1]
+def clean_query(query):
+    """
+    Removes newlines, tabs, and extra spaces from a SQL query string.
 
-    # Handle closing parenthesis
-    if ")" in line:
-      if not stack:
-        raise ValueError("Unmatched closing parenthesis")
-      stack.pop()
+    Parameters:
+    query (str): The SQL query string.
 
-  if stack:
-    raise ValueError("Unmatched opening parenthesis")
+    Returns:
+    str: The cleaned SQL query string.
+    """
+    return re.sub(r'\s+', ' ', query).strip()
 
-  # Wrap main query with subquery alias if needed
-  if subqueries:
-    main_query = f"{result} ({subqueries.popitem()[1]})"
-  else:
-    main_query = result
+def clean_queries_dict(queries_dict):
+    """
+    Cleans each query string in the dictionary by removing newlines, tabs, and extra spaces.
 
-  subqueries["main_query"] = f"""{main_query}"""
-  return subqueries
+    Parameters:
+    queries_dict (dict): A dictionary with subquery aliases as keys and subquery strings as values.
 
-# Example usage
+    Returns:
+    dict: A dictionary with cleaned query strings.
+    """
+    cleaned_dict = {}
+    for key, value in queries_dict.items():
+        cleaned_value = clean_query(value)
+        cleaned_dict[key] = cleaned_value
+    return cleaned_dict
+
+def parse_sql_query(query, keep_whitespace=False):
+    """
+    Parses a SQL query to extract subqueries, formats them, and optionally cleans the query strings.
+    
+    Parameters:
+    query (str): The SQL query string.
+    keep_whitespace (bool): Whether to keep newline and tab characters in the output. Default is False.
+
+    Returns:
+    dict: A dictionary with the main query and subqueries.
+    """
+    # Extract subqueries and aliases
+    subqueries = extract_subqueries(query)
+    
+    # Format subqueries
+    formatted_subqueries = format_subqueries(subqueries)
+    
+    if not keep_whitespace:
+        # Clean subqueries by removing newlines and tabs
+        cleaned_subqueries = clean_queries_dict(formatted_subqueries)
+        return cleaned_subqueries
+    
+    return formatted_subqueries
+
+# Example usage:
 query = """
-Select distinct a,b,c from (select a,y from db.df1 DF1_ALIAS left join (select * from db.df2) DF2_ALIAS DF2_ALIAS.x= DF1_ALIAS.x) SUBQ1 left join db.df3 DF3_NALIAS on SUBQ1.y == DF3_NALIAS.y
+Select distinct a,b,c from (
+    select a,y from db.df1 DF1_ALIAS 
+    left join (select * from db.df2) DF2_ALIAS 
+    on DF2_ALIAS.x = DF1_ALIAS.x
+) SUBQ1 
+left join db.df3 DF3_ALIAS 
+on SUBQ1.y = DF3_ALIAS.y
 """
 
-subquery_dict = identify_subqueries(query)
-print(subquery_dict)
+# Parse the query and get the cleaned dictionary
+parsed_queries = parse_sql_query(query, keep_whitespace=False)
+
+# Print the resulting dictionary
+for key, value in parsed_queries.items():
+    print(f'"{key}": {value},')
