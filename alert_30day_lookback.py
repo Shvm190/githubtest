@@ -81,5 +81,36 @@ class TestPositiveLabel(unittest.TestCase):
         # Assert that both dataframes are equal
         pd.testing.assert_frame_equal(pandas_result, spark_result_pdf, check_like=True)
 
+
+def create_label_genuine_spark(df_nm: DataFrame) -> DataFrame:
+    # Explode the date range into individual dates
+    df_nm = df_nm.withColumn(
+        "date_range",
+        F.expr("sequence(to_date(alert_start_date), to_date(alert_end_date), interval 1 day)")
+    )
+    
+    # Explode the array of dates into individual rows
+    df_exploded = df_nm.withColumn("observation_date", F.explode("date_range"))
+    
+    # Select the needed columns and add new ones
+    df_labeled = df_exploded.select(
+        "observation_date",
+        "cus_lid",
+        "stg_id",
+        "cus_acc_num",
+        "stg_id_cde",
+        "closure_reason",
+        "case_alert_id",
+        "alert_id"
+    ).withColumn("fin_crime_status", F.lit("g")
+    ).withColumn("lookback", F.lit(0))
+    
+    # Optionally reset the index or sort the data
+    return df_labeled
+
+
 if __name__ == '__main__':
     unittest.main()
+
+
+
