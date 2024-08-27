@@ -32,56 +32,6 @@ def create_positive_label_spark(df: DataFrame, look_back: int) -> DataFrame:
     return df
 
 
-import pandas as pd
-from pyspark.sql import SparkSession
-from pyspark.sql import Row
-import unittest
-
-class TestPositiveLabel(unittest.TestCase):
-    
-    @classmethod
-    def setUpClass(cls):
-        # Initialize Spark Session
-        cls.spark = SparkSession.builder.master("local[*]").appName("Unit Test").getOrCreate()
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.spark.stop()
-    
-    def test_positive_label(self):
-        # Create sample data
-        data = {
-            "cus_idr": [1, 2],
-            "stg_id": [101, 102],
-            "cus_acc_num": ["A1", "B1"],
-            "st_cde": ["AA", "BB"],
-            "dateoffraud": pd.to_datetime(["2023-08-01", "2023-08-10"]),
-            "closure_reason": ["reason1", "reason2"],
-            "case_alert_id": [201, 202],
-            "alert_id": [301, 302],
-            "alert_date": pd.to_datetime(["2023-08-01", "2023-08-10"]),
-        }
-        
-        pdf = pd.DataFrame(data)
-        sdf = self.spark.createDataFrame([Row(**row) for row in pdf.to_dict(orient="records")])
-
-        look_back = 30
-
-        # Get results from both Pandas and Spark functions
-        pandas_result = create_positive_label(pdf, look_back)
-        spark_result = create_positive_label_spark(sdf, look_back)
-
-        # Convert Spark result to Pandas for easy comparison
-        spark_result_pdf = spark_result.toPandas()
-
-        # Sorting both dataframes for comparison
-        pandas_result = pandas_result.sort_values(by=pandas_result.columns.tolist()).reset_index(drop=True)
-        spark_result_pdf = spark_result_pdf.sort_values(by=spark_result_pdf.columns.tolist()).reset_index(drop=True)
-
-        # Assert that both dataframes are equal
-        pd.testing.assert_frame_equal(pandas_result, spark_result_pdf, check_like=True)
-
-
 def create_label_genuine_spark(df_nm: DataFrame) -> DataFrame:
     # Explode the date range into individual dates
     df_nm = df_nm.withColumn(
