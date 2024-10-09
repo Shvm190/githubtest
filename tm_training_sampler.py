@@ -1,3 +1,84 @@
+"""
+
+Approach:
+
+# Approach:
+
+Splitting Train and Test Data:
+- Use a random split to ensure 60:40 ratio between train and test datasets.
+- Ensure no customer appears in both datasets.
+
+Sampling Based on Suspicion Periods:
+- Sample based on the different periods:
+    - Alert Date: Always include the first alert date for each customer entry.
+    - Pre-Alert Period: Retain X% of the dates between the suspicion start and first alert date.
+    - Post-Alert Period: Retain Y% of the dates between the first alert and suspicion confirmed date.
+    - Pre-Alert Genuine Period: Retain Z1% of the dates before the suspicion start date, excluding other suspicious windows for the same customer.
+    - Post-Review Genuine Period: Retain Z2% of the dates after suspicion confirmed date, excluding other suspicious windows for the same customer.
+
+Final Schema:
+- Columns:
+    - entity_id: Customer ID.
+    - date_snapshot: The sampled date.
+    - sample_type: Describes whether it's an "alert date", "pre-alert", "post-alert", etc.
+    - train_test: Identifies whether the customer belongs to train or test data.
+
+
+Pre-Requisite:
+
+In addition to the environment setup (Python, PySpark, etc.), your main PySpark code will need a dataset with the following columns, as per the problem description. Here are the specific details:
+
+Columns Required:
+entity_id: String type, representing customer IDs.
+suspicion_start_date: Date type, the start date of the suspicion period.
+first_alert_date: Date type, the date of the first transaction alert.
+suspicion_confirmed_date: Date type, the date suspicion is confirmed.
+Your data may look like the following in PySpark:
+
+entity_id	suspicion_start_date	first_alert_date	suspicion_confirmed_date
+cust1	2024-01-01	2024-01-05	2024-01-10
+cust2	2024-02-01	2024-02-10	2024-02-15
+Date Formats: Make sure dates are in the correct format (yyyy-MM-dd) or converted to a PySpark DateType.
+Multiple Entries for One Customer: The dataset should account for customers having multiple entries, as per your business logic (where one customer might have two separate entries without overlapping dates).
+
+
+
+Sample data creation:
+
+from pyspark.sql import SparkSession
+from pyspark.sql.types import StructType, StructField, StringType, DateType
+from pyspark.sql import functions as F
+
+# Sample data schema
+schema = StructType([
+    StructField("entity_id", StringType(), True),
+    StructField("suspicion_start_date", DateType(), True),
+    StructField("first_alert_date", DateType(), True),
+    StructField("suspicion_confirmed_date", DateType(), True)
+])
+
+# Example data
+data = [
+    ("cust1", "2024-01-01", "2024-01-05", "2024-01-10"),
+    ("cust2", "2024-02-01", "2024-02-10", "2024-02-15"),
+    ("cust1", "2024-03-01", "2024-03-10", "2024-03-15"),  # Multiple entry for cust1
+]
+
+# Initialize Spark session and create DataFrame
+spark = SparkSession.builder.appName("test").getOrCreate()
+
+df = spark.createDataFrame(data, schema)
+
+# To ensure date format is correct, cast string dates to DateType
+df = df.withColumn("suspicion_start_date", F.to_date(F.col("suspicion_start_date"))) \
+       .withColumn("first_alert_date", F.to_date(F.col("first_alert_date"))) \
+       .withColumn("suspicion_confirmed_date", F.to_date(F.col("suspicion_confirmed_date")))
+
+df.show()
+
+Author: Shivam Singh
+"""
+
 from pyspark.sql import functions as F
 from pyspark.sql import Window
 
